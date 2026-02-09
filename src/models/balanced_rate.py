@@ -309,11 +309,12 @@ class BalancedRateNetwork(nn.Module):
         x: torch.Tensor,
         r_e0: Optional[torch.Tensor] = None,
         r_i0: Optional[torch.Tensor] = None,
-        return_dynamics: bool = False
+        return_dynamics: bool = False,
+        return_all_outputs: bool = False
     ) -> torch.Tensor:
         """
         Forward pass through the network.
-        
+
         Parameters
         ----------
         x : torch.Tensor
@@ -322,43 +323,54 @@ class BalancedRateNetwork(nn.Module):
             Initial E/I rates
         return_dynamics : bool
             Whether to return full E/I trajectories
-            
+        return_all_outputs : bool
+            Whether to return outputs at all timesteps (default: False)
+            If False, returns only final output (for Lorenz forecasting)
+            If True, returns outputs at all timesteps (for sequence tasks)
+
         Returns
         -------
         output : torch.Tensor
-            Final output, shape (batch_size, output_size)
+            If return_all_outputs: (batch_size, seq_length, output_size)
+            Else: final output, shape (batch_size, output_size)
             If return_dynamics: (r_e_traj, r_i_traj, output)
         """
         batch_size, seq_length, _ = x.shape
         device = x.device
-        
+
         # Initialize rates
         if r_e0 is None:
             r_e = torch.zeros(batch_size, self.n_e, device=device)
         else:
             r_e = r_e0
-        
+
         if r_i0 is None:
             r_i = torch.zeros(batch_size, self.n_i, device=device)
         else:
             r_i = r_i0
-        
+
         # Store trajectories if requested
-        if return_dynamics:
+        if return_dynamics or return_all_outputs:
             r_e_traj = [r_e]
             r_i_traj = [r_i]
-        
+
         # Process sequence
         for t in range(seq_length):
             r_e, r_i = self.cell(r_e, r_i, x[:, t, :])
-            
-            if return_dynamics:
+
+            if return_dynamics or return_all_outputs:
                 r_e_traj.append(r_e)
                 r_i_traj.append(r_i)
-        
+
         # Decode output
-        output = self.decoder(r_e)
-        
+        if return_all_outputs:
+            # Decode all timesteps (skip initial state, use states after each input)
+            r_e_all = torch.stack(r_e_traj[1:], dim=1)  # (batch, seq, n_e)
+            output = self.decoder(r_e_all)  # (batch, seq, output)
+        else:
+            # Decode only final timestep
+            output = self.decoder(r_e)  # (batch, output)
+
         if return_dynamics:
             r_e_traj = torch.stack(r_e_traj, dim=1)
             r_i_traj = torch.stack(r_i_traj, dim=1)

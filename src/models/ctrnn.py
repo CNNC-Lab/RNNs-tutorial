@@ -201,11 +201,12 @@ class ContinuousTimeRNN(nn.Module):
         x: torch.Tensor,
         t: Optional[torch.Tensor] = None,
         h0: Optional[torch.Tensor] = None,
-        return_hidden: bool = False
+        return_hidden: bool = False,
+        return_all_outputs: bool = False
     ) -> torch.Tensor:
         """
         Forward pass through the CT-RNN.
-        
+
         Parameters
         ----------
         x : torch.Tensor
@@ -218,20 +219,24 @@ class ContinuousTimeRNN(nn.Module):
             Initial hidden state, shape (batch_size, hidden_size)
         return_hidden : bool
             Whether to return hidden states at all time points
-            
+        return_all_outputs : bool
+            Whether to return outputs at all timesteps (default: True)
+            If False, returns only final output (for Lorenz forecasting)
+
         Returns
         -------
         output : torch.Tensor
             If return_hidden: (hidden_trajectory, output)
+            Else if return_all_outputs: (batch_size, seq_length, output_size)
             Else: final output, shape (batch_size, output_size)
         """
         batch_size = x.shape[0]
         device = x.device
-        
+
         # Initialize hidden state
         if h0 is None:
             h0 = torch.zeros(batch_size, self.hidden_size, device=device)
-        
+
         # Handle different input modes
         if x.dim() == 3:
             # Sequence input: process step by step with discrete-time approximation
@@ -239,10 +244,10 @@ class ContinuousTimeRNN(nn.Module):
             seq_length = x.shape[1]
             if t is None:
                 t = torch.arange(seq_length + 1, dtype=torch.float32, device=device)
-            
+
             hidden_states = [h0]
             h = h0
-            
+
             for i in range(seq_length):
                 # Integrate from t[i] to t[i+1] with current input
                 ode_func = CTRNNODEFunc(self.cell, x[:, i, :])
@@ -250,20 +255,27 @@ class ContinuousTimeRNN(nn.Module):
                 h_traj = self.odeint(ode_func, h, t_span, method=self.solver)
                 h = h_traj[-1]  # Take final state
                 hidden_states.append(h)
-            
+
             hidden_states = torch.stack(hidden_states[1:], dim=1)  # (batch, seq, hidden)
-            output = self.decoder(hidden_states[:, -1, :])  # Final output
-            
+
+            # Decode outputs
+            if return_all_outputs:
+                # Decode all timesteps (for sequence-to-sequence tasks like flip-flop)
+                output = self.decoder(hidden_states)  # (batch, seq, output)
+            else:
+                # Decode only final timestep (for forecasting tasks like Lorenz)
+                output = self.decoder(hidden_states[:, -1, :])  # (batch, output)
+
         else:
             # Constant input: integrate over time span
             if t is None:
                 t = torch.linspace(0, 1, 10, device=device)
-            
+
             ode_func = CTRNNODEFunc(self.cell, x)
             hidden_states = self.odeint(ode_func, h0, t, method=self.solver)
             hidden_states = hidden_states.permute(1, 0, 2)  # (batch, time, hidden)
             output = self.decoder(hidden_states[:, -1, :])
-        
+
         if return_hidden:
             return hidden_states, output
         return output

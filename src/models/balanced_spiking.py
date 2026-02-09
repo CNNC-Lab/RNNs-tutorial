@@ -215,11 +215,13 @@ class BalancedSpikingCell(nn.Module):
         # Initialize states if needed
         if state_e is None:
             state_e = LIFState(
+                z=torch.zeros(batch_size, self.n_e, device=device),
                 v=torch.zeros(batch_size, self.n_e, device=device),
                 i=torch.zeros(batch_size, self.n_e, device=device)
             )
         if state_i is None:
             state_i = LIFState(
+                z=torch.zeros(batch_size, self.n_i, device=device),
                 v=torch.zeros(batch_size, self.n_i, device=device),
                 i=torch.zeros(batch_size, self.n_i, device=device)
             )
@@ -317,69 +319,96 @@ class BalancedSpikingNetwork(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        return_spikes: bool = False
+        return_spikes: bool = False,
+        return_all_outputs: bool = False
     ) -> torch.Tensor:
         """
         Forward pass.
-        
+
         Parameters
         ----------
         x : torch.Tensor
             Input sequence, shape (batch_size, seq_length, input_size)
         return_spikes : bool
             Whether to return spike trains
-            
+        return_all_outputs : bool
+            Whether to return outputs at all timesteps (for sequence tasks)
+            If False, returns only final output (for forecasting tasks)
+
         Returns
         -------
         output : torch.Tensor
-            Output, shape (batch_size, output_size)
+            If return_all_outputs: (batch_size, seq_length, output_size)
+            Else: (batch_size, output_size)
             If return_spikes: (output, spikes_e, spikes_i)
         """
         batch_size, seq_length, _ = x.shape
         device = x.device
-        
+
         # Initialize
         state_e, state_i = None, None
         spikes_e_prev = torch.zeros(batch_size, self.n_e, device=device)
         spikes_i_prev = torch.zeros(batch_size, self.n_i, device=device)
-        
+
         # Record spikes
         spikes_e_all = []
         spikes_i_all = []
         voltages_e_all = []
-        
+        outputs_all = []
+
+        # For temporal rate coding, keep exponential moving average of spikes
+        tau_filter = 10.0  # Time constant for spike filtering (ms)
+        alpha_filter = np.exp(-1.0 / tau_filter)
+        filtered_rates = torch.zeros(batch_size, self.n_e, device=device)
+
         # Process sequence
         for t in range(seq_length):
             spikes_e, spikes_i, state_e, state_i = self.cell(
                 x[:, t, :], state_e, state_i, spikes_e_prev, spikes_i_prev
             )
-            
+
             spikes_e_all.append(spikes_e)
             spikes_i_all.append(spikes_i)
             voltages_e_all.append(state_e.v)
-            
+
+            # Update filtered firing rates (low-pass filter over spikes)
+            filtered_rates = alpha_filter * filtered_rates + (1 - alpha_filter) * spikes_e
+
+            # Decode at this timestep
+            if return_all_outputs:
+                if self.readout_mode == 'rate':
+                    output_t = self.readout(filtered_rates)
+                elif self.readout_mode == 'voltage':
+                    output_t = self.readout(state_e.v)
+                else:
+                    output_t = self.readout(filtered_rates)
+                outputs_all.append(output_t)
+
             spikes_e_prev = spikes_e
             spikes_i_prev = spikes_i
-        
+
         spikes_e_all = torch.stack(spikes_e_all, dim=1)  # (batch, time, n_e)
         spikes_i_all = torch.stack(spikes_i_all, dim=1)
         voltages_e_all = torch.stack(voltages_e_all, dim=1)
-        
-        # Compute readout based on mode
-        if self.readout_mode == 'rate':
-            # Average firing rate
-            rates_e = spikes_e_all.mean(dim=1)  # (batch, n_e)
-            output = self.readout(rates_e)
-        elif self.readout_mode == 'voltage':
-            # Final membrane voltage
-            output = self.readout(voltages_e_all[:, -1, :])
-        elif self.readout_mode == 'last':
-            # Last time step spikes (smoothed)
-            rates_e = spikes_e_all[:, -10:, :].mean(dim=1)
-            output = self.readout(rates_e)
+
+        # Compute final output
+        if return_all_outputs:
+            output = torch.stack(outputs_all, dim=1)  # (batch, seq_length, output_size)
         else:
-            raise ValueError(f"Unknown readout mode: {self.readout_mode}")
-        
+            # Compute readout based on mode (final output only)
+            if self.readout_mode == 'rate':
+                # Average firing rate over entire sequence
+                rates_e = spikes_e_all.mean(dim=1)  # (batch, n_e)
+                output = self.readout(rates_e)
+            elif self.readout_mode == 'voltage':
+                # Final membrane voltage
+                output = self.readout(voltages_e_all[:, -1, :])
+            elif self.readout_mode == 'last':
+                # Last time step filtered rate
+                output = self.readout(filtered_rates)
+            else:
+                raise ValueError(f"Unknown readout mode: {self.readout_mode}")
+
         if return_spikes:
             return output, spikes_e_all, spikes_i_all
         return output
