@@ -1,8 +1,16 @@
 # RNNs as Computational Dynamical Systems
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Open in Colab:**
+[![00 Introduction](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/CNNC-Lab/RNNs-tutorial/blob/main/notebooks/00_introduction.ipynb)
+[![01 CT-RNN](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/CNNC-Lab/RNNs-tutorial/blob/main/notebooks/01_continuous_time_rnn.ipynb)
+[![02 Balanced Rate](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/CNNC-Lab/RNNs-tutorial/blob/main/notebooks/02_balanced_rate_network.ipynb)
+[![03 Spiking](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/CNNC-Lab/RNNs-tutorial/blob/main/notebooks/03_balanced_spiking_network.ipynb)
+[![04 Analysis](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/CNNC-Lab/RNNs-tutorial/blob/main/notebooks/04_dynamical_analysis.ipynb)
+[![05 Synthesis](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/CNNC-Lab/RNNs-tutorial/blob/main/notebooks/05_synthesis.ipynb)
+[![06 Flip-Flop](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/CNNC-Lab/RNNs-tutorial/blob/main/notebooks/06_flipflop_task.ipynb)
 
 A hands-on tutorial exploring recurrent neural networks through the lens of dynamical systems theory. Students implement the same temporal prediction task (Lorenz-63 attractor reconstruction) across multiple network architectures—from continuous-time RNNs to biologically plausible balanced spiking networks—enabling direct comparison of dynamics, performance, and interpretability.
 
@@ -25,8 +33,43 @@ By the end of this tutorial, students will be able to:
 | [03_Balanced_Spiking_Network](notebooks/03_balanced_spiking_network.ipynb) | 45 min | LIF neurons with norse, reservoir computing |
 | [04_Dynamical_Analysis](notebooks/04_dynamical_analysis.ipynb) | 30 min | Fixed points, Lyapunov exponents, attractor comparison |
 | [05_Synthesis](notebooks/05_synthesis.ipynb) | 30 min | Architecture comparison, discussion prompts |
+| [06_Flip-Flop_Task](notebooks/06_flipflop_task.ipynb) | 45 min | **Demo**: Working memory task, PCA, fixed points |
 
-**Total duration: ~3.5-4 hours**
+**Total duration: ~4-4.5 hours** (core: 3.5h, optional demo: 45min)
+
+## 📊 Tutorial Data Flow
+
+**Shared Dataset Approach** for consistency:
+1. **Notebook 00** generates Lorenz data and saves to `data/processed/lorenz_data.npz`
+2. **Notebooks 01-05** load this shared dataset via `src.data.create_shared_dataloaders()`
+3. **Notebook 06** demonstrates a different task (3-bit flip-flop) using the same framework
+
+This ensures:
+- ✅ Consistency across all models
+- ✅ No duplication of data generation
+- ✅ Fair comparison between architectures
+- ✅ Reproducible results
+- ✅ Easy adaptation to new tasks
+
+## 🏗️ Code Organization
+
+All core functionality is in the `src/` package:
+- **`src.data`**: Lorenz generation, flip-flop task, datasets, data loading utilities
+- **`src.models`**: CT-RNN, Balanced Rate/Spiking network implementations
+- **`src.utils`**: Training loops, evaluation metrics, visualization
+- **`src.analysis`**: Fixed points, Lyapunov exponents, dynamical analysis
+
+The notebooks focus on pedagogy while leveraging production-ready code from `src/`.
+
+### 🎯 Notebook 06: Extending to New Tasks
+
+The optional **flip-flop notebook** demonstrates how to apply the framework to a different cognitive task:
+- **Task**: 3-bit flip-flop working memory (toggle and maintain state)
+- **Models**: CT-RNN and Balanced Rate Network trained on discrete states
+- **Analysis**: PCA state-space visualization, fixed point structure for 8 states
+- **Purpose**: Shows how to extend the framework to your own tasks
+
+This serves as a template for students to explore other tasks (delayed match-to-sample, context-dependent integration, go/no-go, etc.).
 
 ## 🧠 The Unifying Task: Lorenz-63 Attractor Reconstruction
 
@@ -77,14 +120,14 @@ if V > V_thresh: spike, V → V_reset
 
 ### Option 1: Google Colab (Recommended)
 
-Click the "Open in Colab" badge on any notebook. All dependencies are installed automatically.
+Click any of the "Open in Colab" badges above to launch the notebooks directly in Google Colab. All dependencies are installed automatically.
 
 ### Option 2: Local Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/rnn-dynamical-systems-tutorial.git
-cd rnn-dynamical-systems-tutorial
+git clone https://github.com/CNNC-Lab/RNNs-tutorial.git
+cd RNNs-tutorial
 
 # Create virtual environment
 python -m venv venv
@@ -93,8 +136,26 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
+# Install package in editable mode (recommended)
+pip install -e .
+
 # Launch Jupyter
 jupyter notebook notebooks/
+```
+
+### ⚠️ Important: Notebook Execution Order
+
+**Run notebooks in sequence!**
+1. **00_introduction.ipynb** - Generates and saves shared dataset
+2. **01-03** - Can be run independently after notebook 00
+3. **04-05** - Require trained models from notebooks 01-03
+
+Each notebook imports from the `src/` package:
+```python
+from src import setup_environment
+from src.data import create_shared_dataloaders
+from src.models import ContinuousTimeRNN
+from src.utils import train_model, compute_prediction_metrics
 ```
 
 ## 📦 Dependencies
@@ -117,10 +178,13 @@ rnn-dynamical-systems-tutorial/
 │   ├── 02_balanced_rate_network.ipynb
 │   ├── 03_balanced_spiking_network.ipynb
 │   ├── 04_dynamical_analysis.ipynb
-│   └── 05_synthesis.ipynb
+│   ├── 05_synthesis.ipynb
+│   └── 06_flipflop_task.ipynb  # Optional: Different task demo
 ├── src/                       # Reusable Python modules
 │   ├── models/               # Network architectures
 │   ├── data/                 # Data generation utilities
+│   │   ├── __init__.py       # Lorenz system
+│   │   └── flipflop.py       # 3-bit flip-flop task
 │   ├── analysis/             # Dynamical systems analysis tools
 │   └── utils/                # Plotting, helpers
 ├── figures/                   # Generated figures

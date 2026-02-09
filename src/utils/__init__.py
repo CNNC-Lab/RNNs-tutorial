@@ -517,6 +517,217 @@ def compute_valid_time(
     return valid_time
 
 
+# =============================================================================
+# Educational Visualization Utilities
+# =============================================================================
+
+def plot_lorenz_intro(
+    trajectory: np.ndarray,
+    t: Optional[np.ndarray] = None,
+    figsize: Tuple[int, int] = (14, 5)
+) -> plt.Figure:
+    """
+    Create introduction-style Lorenz visualization (3D + time series).
+
+    Used in notebook 00 for initial presentation of the Lorenz system.
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        Trajectory data, shape (n_times, 3)
+    t : np.ndarray, optional
+        Time points. If None, assumes dt=0.01
+    figsize : tuple
+        Figure size
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure object
+
+    Examples
+    --------
+    >>> from src.utils import plot_lorenz_intro
+    >>> fig = plot_lorenz_intro(trajectory, t)
+    >>> plt.show()
+    """
+    from mpl_toolkits.mplot3d import Axes3D
+
+    fig = plt.figure(figsize=figsize)
+
+    # 3D attractor
+    ax1 = fig.add_subplot(121, projection='3d')
+    n_show = min(5000, len(trajectory))
+    ax1.plot(trajectory[:n_show, 0], trajectory[:n_show, 1], trajectory[:n_show, 2],
+             lw=0.5, alpha=0.8, color='steelblue')
+    ax1.set_xlabel('X')
+    ax1.set_ylabel('Y')
+    ax1.set_zlabel('Z')
+    ax1.set_title('Lorenz Attractor (3D)')
+    ax1.view_init(elev=20, azim=45)
+
+    # Time series
+    ax2 = fig.add_subplot(122)
+    if t is None:
+        t = np.arange(len(trajectory)) * 0.01
+    n_show = min(2000, len(trajectory))
+    ax2.plot(t[:n_show], trajectory[:n_show, 0], label='x', alpha=0.8)
+    ax2.plot(t[:n_show], trajectory[:n_show, 1], label='y', alpha=0.8)
+    ax2.plot(t[:n_show], trajectory[:n_show, 2], label='z', alpha=0.8)
+    ax2.set_xlabel('Time')
+    ax2.set_ylabel('Value')
+    ax2.set_title('Time Series')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_prediction_comparison_detailed(
+    targets: np.ndarray,
+    predictions: np.ndarray,
+    per_dim_r2: list,
+    n_show: int = 500,
+    dim_names: list = None,
+    title: str = 'Prediction vs True Values',
+    figsize: Tuple[int, int] = (16, 10)
+) -> plt.Figure:
+    """
+    Detailed 3-panel comparison with error shading and R² scores.
+
+    Used in notebooks 01-03 for evaluation visualization.
+
+    Parameters
+    ----------
+    targets : np.ndarray
+        True values, shape (n_samples, 3)
+    predictions : np.ndarray
+        Predicted values, shape (n_samples, 3)
+    per_dim_r2 : list
+        R² score per dimension [r2_x, r2_y, r2_z]
+    n_show : int
+        Number of samples to show
+    dim_names : list, optional
+        Dimension names, default ['x', 'y', 'z']
+    title : str
+        Figure title
+    figsize : tuple
+        Figure size
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure object
+
+    Examples
+    --------
+    >>> fig = plot_prediction_comparison_detailed(
+    ...     targets_denorm, preds_denorm, per_dim_r2,
+    ...     n_show=500, title='CT-RNN: Predictions'
+    ... )
+    >>> plt.show()
+    """
+    if dim_names is None:
+        dim_names = ['x', 'y', 'z']
+
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
+
+    fig, axes = plt.subplots(3, 1, figsize=figsize, sharex=True)
+    n_show = min(n_show, len(targets))
+
+    for i, (ax, name, color) in enumerate(zip(axes, dim_names, colors)):
+        # Plot predictions and targets
+        ax.plot(targets[:n_show, i], color=color, linestyle='-',
+                label='True', linewidth=2, alpha=0.8)
+        ax.plot(predictions[:n_show, i], color='red', linestyle='--',
+                label='Predicted', linewidth=1.5, alpha=0.7)
+
+        # Add error shading
+        error = np.abs(targets[:n_show, i] - predictions[:n_show, i])
+        ax.fill_between(range(n_show),
+                         targets[:n_show, i] - error,
+                         targets[:n_show, i] + error,
+                         color='red', alpha=0.1, label='Error')
+
+        ax.set_ylabel(f'{name.upper()} coordinate', fontsize=12, fontweight='bold')
+        ax.legend(loc='upper right', fontsize=10)
+        ax.grid(True, alpha=0.3)
+
+        # Add R² score as text
+        ax.text(0.02, 0.95, f'R² = {per_dim_r2[i]:.4f}',
+                transform=ax.transAxes, fontsize=11, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    axes[-1].set_xlabel('Sample', fontsize=12)
+    plt.suptitle(title, fontsize=14, fontweight='bold', y=0.995)
+    plt.tight_layout()
+
+    return fig
+
+
+def plot_scatter_prediction(
+    targets: np.ndarray,
+    predictions: np.ndarray,
+    per_dim_r2: list,
+    dim_names: list = None,
+    figsize: Tuple[int, int] = (15, 5)
+) -> plt.Figure:
+    """
+    Scatter plots showing prediction accuracy per dimension.
+
+    Parameters
+    ----------
+    targets : np.ndarray
+        True values, shape (n_samples, 3)
+    predictions : np.ndarray
+        Predicted values, shape (n_samples, 3)
+    per_dim_r2 : list
+        R² score per dimension
+    dim_names : list, optional
+        Dimension names, default ['X', 'Y', 'Z']
+    figsize : tuple
+        Figure size
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure object
+
+    Examples
+    --------
+    >>> fig = plot_scatter_prediction(targets_denorm, preds_denorm, per_dim_r2)
+    >>> plt.show()
+    """
+    if dim_names is None:
+        dim_names = ['X', 'Y', 'Z']
+
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
+
+    fig, axes = plt.subplots(1, 3, figsize=figsize)
+
+    for i, (ax, name, color) in enumerate(zip(axes, dim_names, colors)):
+        ax.scatter(targets[:, i], predictions[:, i],
+                   alpha=0.3, s=10, color=color, edgecolors='none')
+
+        # Perfect prediction line
+        min_val = min(targets[:, i].min(), predictions[:, i].min())
+        max_val = max(targets[:, i].max(), predictions[:, i].max())
+        ax.plot([min_val, max_val], [min_val, max_val], 'k--',
+                linewidth=2, alpha=0.7, label='Perfect prediction')
+
+        ax.set_xlabel(f'True {name}', fontsize=12)
+        ax.set_ylabel(f'Predicted {name}', fontsize=12)
+        ax.set_title(f'{name} Dimension (R²={per_dim_r2[i]:.4f})',
+                     fontsize=12, fontweight='bold')
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.3)
+        ax.set_aspect('equal', adjustable='box')
+
+    plt.tight_layout()
+    return fig
+
+
 if __name__ == "__main__":
     print("Utilities module loaded successfully!")
     

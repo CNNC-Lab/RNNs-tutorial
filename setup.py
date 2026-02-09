@@ -4,10 +4,10 @@ setup(
     name="rnn_dynamical_systems",
     version="0.1.0",
     description="Tutorial: RNNs as Computational Dynamical Systems",
-    author="Renato Duarte",
+    author="CNNC Lab",
     author_email="",
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
+    url="https://github.com/CNNC-Lab/RNNs-tutorial",
+    packages=find_packages(),
     python_requires=">=3.9",
     install_requires=[
         "numpy>=1.21.0",
