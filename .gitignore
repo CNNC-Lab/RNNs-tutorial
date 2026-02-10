@@ -49,8 +49,8 @@ checkpoints/
 *.pt
 *.ckpt
 
-# Data
-data/
+# Data (only ignore root-level data directory, not src/data)
+/data/
 *.csv
 *.h5
 *.hdf5
