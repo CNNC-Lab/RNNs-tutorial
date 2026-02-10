@@ -564,6 +564,9 @@ def create_shared_dataloaders(
     This is the RECOMMENDED way to load data in notebooks 01-05 to ensure
     consistency across the tutorial.
 
+    If the dataset doesn't exist (e.g., first run in Colab), it will be
+    automatically generated and saved.
+
     Parameters
     ----------
     dataset_path : str
@@ -595,6 +598,42 @@ def create_shared_dataloaders(
     ...     # y shape: (batch_size, 3)
     ...     break
     """
+    import os
+
+    # Auto-generate data if it doesn't exist (useful for Colab)
+    if not os.path.exists(dataset_path):
+        print(f"⚠️  Dataset not found at {dataset_path}")
+        print("📦 Auto-generating Lorenz dataset (this may take a moment)...")
+
+        # Generate trajectories
+        t_train, traj_train = generate_lorenz_trajectory(
+            t_span=(0, 140), dt=0.01, seed=42, transient=10.0
+        )
+        t_val, traj_val = generate_lorenz_trajectory(
+            t_span=(0, 30), dt=0.01, seed=43, transient=10.0
+        )
+        t_test, traj_test = generate_lorenz_trajectory(
+            t_span=(0, 30), dt=0.01, seed=44, transient=10.0
+        )
+
+        # Normalize
+        mean = traj_train.mean(axis=0)
+        std = traj_train.std(axis=0)
+        train_norm = (traj_train - mean) / std
+        val_norm = (traj_val - mean) / std
+        test_norm = (traj_test - mean) / std
+
+        # Save
+        save_lorenz_dataset(
+            filepath=dataset_path,
+            train_data=train_norm,
+            val_data=val_norm,
+            test_data=test_norm,
+            normalization_params={'mean': mean, 'std': std},
+            metadata={'dt': 0.01, 'seq_length': 50}
+        )
+        print("✓ Dataset generated and saved!")
+
     data = load_lorenz_dataset(dataset_path)
 
     # Use seq_length from file or parameter
